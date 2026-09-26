@@ -1,0 +1,101 @@
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * Classe di prova, non fa parte dell'applicazione finale: serve solo per
+ * verificare "a occhio" che il reader importi correttamente il CSV e per
+ * farsi un'idea preliminare delle anomalie presenti nel dataset, prima
+ * di passare alla fase di pulizia vera e propria.
+ *
+ * Per eseguirla in Eclipse: tasto destro sul file, Run As -> Java
+ * Application. Prima di lanciarla, aggiornare la costante PERCORSO_CSV
+ * con il percorso del file sul proprio computer.
+ */
+public class Main{
+
+  
+
+    public static void main(String[] args) {
+        Path percorso = Path.of("src","DISPO_GAP.csv");
+        Path fileOutput= Paths.get("DISPO_GAP_PULITO.csv");
+        if (Files.notExists(percorso)) {
+            System.out.println("File non trovato: " + percorso.toAbsolutePath());
+            System.out.println("Verifica che il file CSV sia nella cartella indicata " );
+            return;
+        }
+
+        DispositivoCsvReader reader = new DispositivoCsvReader();
+        List<Dispositivo> dispositivi;
+
+        try {
+            dispositivi = reader.leggi(percorso);
+        } catch (IOException e) {
+            System.out.println("Errore durante la lettura del file: " + e.getMessage());
+            return;
+        }
+
+        System.out.println("Dispositivi importati: " + dispositivi.size());
+
+        List<String> errori = reader.getErroriRiscontrati();
+        System.out.println("Righe scartate: " + errori.size());
+        errori.forEach(System.out::println);
+
+        long conIncongruenzaNumerica = dispositivi.stream()
+                .filter(Dispositivo::haIncongruenzaNumerica)
+                .count();
+        long conCoordinateMancanti = dispositivi.stream()
+                .filter(Dispositivo::haCoordinateMancanti)
+                .count();
+        
+     // Scelta della strategia di deduplica e correzione cnd
+        // ( SommaQuantita, MantieniPrimaOccorrenza, MantieniUltimaOccorrenza)
+        strategiaDeduplica strategia= new MantenimentoPrimaOccorrenza();
+        ICorrettoreCnd correttore= new CorrettoreCndImpl();
+        
+     // 3. Inizializzazione delle dipendenze per la bonifica (con le nuove interfacce)
+       normalizzazioni normalizzatore = new StandardizzatoreTestoImpl();
+        ICorrettoreCnd correttoreCnd = new CorrettoreCndImpl();
+        
+        
+        System.out.println("Con incongruenza numerica (disponibili > totale): " + conIncongruenzaNumerica);
+        System.out.println("Con coordinate mancanti: " + conCoordinateMancanti);
+
+        Map<Dispositivo.StatoCaratteristica, Long> distribuzioneStato = dispositivi.stream()
+                .collect(Collectors.groupingBy(Dispositivo::statoCaratteristica, Collectors.counting()));
+        System.out.println("Distribuzione statoCaratteristica: " + distribuzioneStato);
+
+        System.out.println();
+        System.out.println("Primi 3 dispositivi importati, a titolo di esempio:");
+        dispositivi.stream().limit(3).forEach(System.out::println);
+        
+     // 4. Creazione dell'orchestratore PulitoreDataset
+        PulitoreDataset pulitore = new PulitoreDataset(
+                strategia,
+                normalizzatore,
+                correttore ); 
+        System.out.println("Avvio del processo di bonifica e creazione del nuovo file...");
+
+        try {
+            // 5. Esecuzione del processo di conversione e creazione del file pulito
+            int recordScritti = pulitore.convertiInFilePulito(percorso, fileOutput);
+
+            System.out.println("--------------------------------------------------");
+            System.out.println("Processo completato con successo!");
+            System.out.println("File creato: " + fileOutput.toAbsolutePath());
+            System.out.println("Totale record salvati: " + recordScritti);
+            System.out.println("--------------------------------------------------");
+
+        } catch (IOException e) {
+            System.err.println("Errore durante la lettura/scrittura dei file CSV: " + e.getMessage());
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.err.println("Si Ã¨ verificato un errore inatteso: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}

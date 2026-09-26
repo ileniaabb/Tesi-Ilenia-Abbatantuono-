@@ -1,0 +1,4 @@
+INDEX VERSION 1.134+C:\Users\ileab\Desktop\ile\Analisi_d\AnalisiDati\.metadata\.plugins\org.eclipse.jdt.core
+343440104.index
+1067094681.index
+1865797976.index
