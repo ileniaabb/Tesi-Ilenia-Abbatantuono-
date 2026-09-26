@@ -116,32 +116,53 @@ public class GeneratoreGrafici1 {
            
 
             // GRAFICI
-         // Primo grafico a torta (Tipologie in Puglia)
-            DefaultPieDataset datasetTorta = new DefaultPieDataset();
-            for (Map.Entry<String, Integer> entry : macchinariPuglia.entrySet()) {
-                datasetTorta.setValue(entry.getKey(), entry.getValue());
+// 1. Primo grafico a barre orizzontali (Tipologie in Puglia, ordinate in modo decrescente)
+            
+            //  Estrai le entry dalla mappa in una lista per poterle ordinare
+            List<Map.Entry<String, Integer>> tipologiePugliaOrdinate = new ArrayList<>(macchinariPuglia.entrySet());
+            
+            //  Ordina la lista in base ai valori in modo DECRESCENTE (dal più grande al più piccolo)
+            tipologiePugliaOrdinate.sort((e1, e2) -> e2.getValue().compareTo(e1.getValue()));
+
+            //  Crea il dataset per il grafico a barre
+            DefaultCategoryDataset datasetTipologiePuglia = new DefaultCategoryDataset();
+            for (Map.Entry<String, Integer> entry : tipologiePugliaOrdinate) {
+                datasetTipologiePuglia.addValue(entry.getValue(), "Quantità", entry.getKey());
             }
             
-            JFreeChart chartTorta = ChartFactory.createPieChart(
-                "Apparecchiature Sanitarie in Puglia", // Titolo
-                datasetTorta,                          // Dataset
-                true,                                  // Legenda
-                true,                                  // Tooltips
-                false                                  // URL
+            //  Crea il grafico a barre specificando l'orientamento ORIZZONTALE
+            JFreeChart chartTipologiePuglia = ChartFactory.createBarChart(
+                "Apparecchiature Sanitarie in Puglia: Analisi per Tipologia", // Titolo
+                "Tipologia Macchinario",                                      // Etichetta Asse X (che diventerà Y in orizzontale)
+                "Numero di Apparecchiature",                                  // Etichetta Asse Y (che diventerà X in orizzontale)
+                datasetTipologiePuglia,                                       // Dataset ordinato
+                PlotOrientation.HORIZONTAL,                                   // ORIENTAMENTO ORIZZONTALE
+                false,                                                        // Legenda (falso, non serve per una sola serie)
+                true,                                                         // Tooltips
+                false                                                         // URL
             );
             
-       
-            PiePlot plot = (PiePlot) chartTorta.getPlot();
-            plot.setSimpleLabels(false);
-       
-            plot.setLabelGenerator(new org.jfree.chart.labels.StandardPieSectionLabelGenerator(
-                "{0}: {1} ({2})", 
-                new java.text.DecimalFormat("0"), 
-                new java.text.DecimalFormat("0.00%")
-            ));
-            plot.setBackgroundPaint(new java.awt.Color(190,225,245));
+            //  Estetica del grafico (colori, valori sulle barre, ecc.)
+            CategoryPlot plotTipologiePuglia = chartTipologiePuglia.getCategoryPlot();
+            plotTipologiePuglia.setBackgroundPaint(new java.awt.Color(190, 225, 245)); // Stesso sfondo azzurro
+            plotTipologiePuglia.setRangeGridlinePaint(java.awt.Color.WHITE);           // Griglia bianca
             
-            ChartUtils.saveChartAsPNG(new File("grafico_puglia_tipologie.png"), chartTorta, 800, 500);
+            org.jfree.chart.renderer.category.BarRenderer rendererTipologie = 
+                (org.jfree.chart.renderer.category.BarRenderer) plotTipologiePuglia.getRenderer();
+            
+            // Colore delle barre e rimozione ombre
+            rendererTipologie.setSeriesPaint(0, new java.awt.Color(79, 129, 189)); // Blu elegante
+            rendererTipologie.setShadowVisible(false);
+            rendererTipologie.setBarPainter(new org.jfree.chart.renderer.category.StandardBarPainter());
+            
+            // Mostra il numero esatto alla fine di ogni barra
+            rendererTipologie.setDefaultItemLabelsVisible(true); 
+            rendererTipologie.setDefaultItemLabelGenerator(new org.jfree.chart.labels.StandardCategoryItemLabelGenerator(
+                "{2}", new java.text.DecimalFormat("0")
+            ));
+            
+            //  Salva il grafico
+            ChartUtils.saveChartAsPNG(new File("grafico_puglia_tipologie_barre.png"), chartTipologiePuglia, 800, 500);
 
             // 2. Secondo grafico 
             DefaultCategoryDataset datasetBarrePesato = new DefaultCategoryDataset();
@@ -151,15 +172,15 @@ public class GeneratoreGrafici1 {
             datasetBarrePesato.addValue(mediaPesataSenzaPuglia100k, "Densità", "Media Altre Regioni");
 
             JFreeChart chartBarrePesato = ChartFactory.createBarChart(
-                "Confronto Densità Apparecchiature per 100.000 Abitanti(puglia -", // Titolo
-                "Area Geografica",                              // Etichetta Asse X
-                "N. Apparecchiature per 100k Ab.",              // Etichetta Asse Y
-                datasetBarrePesato, 
-                PlotOrientation.VERTICAL, 
-                true, // Legenda (
-                true,  // Tooltip
-                false  
-            );
+                    "Confronto Densità (Puglia - Italia)",          
+                    "Area Geografica",                              // Etichetta Asse X
+                    "N. Apparecchiature per 100k Ab.",              // Etichetta Asse Y
+                    datasetBarrePesato, 
+                    PlotOrientation.VERTICAL, 
+                    true,  // Legenda 
+                    true,  // Tooltip
+                    false  
+                );
             
       
             CategoryPlot plotBarre = chartBarrePesato.getCategoryPlot();
@@ -206,13 +227,19 @@ public class GeneratoreGrafici1 {
                 false    // URL
             );
             
-            CategoryPlot plotTutte = chartTutteRegioni.getCategoryPlot();
+CategoryPlot plotTutte = chartTutteRegioni.getCategoryPlot();
             
-            // TRUCCO: Usiamo lo StackedBarRenderer per compattare le barre
-            // e avere un colore diverso per ciascuna regione senza lasciare buchi
             StackedBarRenderer renderer = new StackedBarRenderer();
             renderer.setShadowVisible(false);
             renderer.setBarPainter(new StandardBarPainter()); 
+            // Scorriamo tutte le serie generate per trovare la Puglia
+            for (int i = 0; i < datasetTutteRegioni.getRowCount(); i++) {
+                String nomeRegione = (String) datasetTutteRegioni.getRowKey(i);
+                if (nomeRegione.equalsIgnoreCase("PUGLIA")) {
+                    // Imposta un rosso brillante che contrasta bene col testo nero dell'etichetta
+                    renderer.setSeriesPaint(i, java.awt.Color.RED); 
+                }
+            }
 
             renderer.setDefaultItemLabelsVisible(true);
             renderer.setDefaultItemLabelGenerator(new org.jfree.chart.labels.StandardCategoryItemLabelGenerator(
